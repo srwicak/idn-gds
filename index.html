@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -61,12 +61,12 @@
   .proj-body { padding: 12px 14px; }
   .field-label { font-size: 11px; color: var(--text-faint); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; display: block; }
 
-  input[type="text"], textarea {
+  input[type="text"], input[type="password"], textarea {
     width: 100%; font-family: inherit; font-size: 14px; color: var(--text);
     background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
     padding: 8px 10px; resize: none; line-height: 1.5;
   }
-  input[type="text"]:focus, textarea:focus { outline: none; border-color: var(--accent); background: var(--surface); }
+  input[type="text"]:focus, input[type="password"]:focus, textarea:focus { outline: none; border-color: var(--accent); background: var(--surface); }
 
   .task-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
   .task-row input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--green); cursor: pointer; flex-shrink: 0; }
@@ -125,17 +125,17 @@
   <header class="top">
     <div class="title-block">
       <h1>Glocal Daily Scrum</h1>
-      <p>KOR + IDN · isi harian, copy ke Slack, download tiap Jumat</p>
+      <p>KOR + IDN · fill daily, copy to Slack, download every Friday</p>
     </div>
     <div class="day-pill" id="todayPill">—</div>
   </header>
 
   <div class="banner" id="fridayBanner">
     <span>📥</span>
-    <div><strong>Hari Jumat!</strong> Jangan lupa download rekap minggu ini sebelum clock out. File otomatis ke-download saat halaman dibuka.</div>
+    <div><strong>It's Friday!</strong> Don't forget to download this week's recap before you clock out. File downloads automatically when the page opens.</div>
   </div>
 
-  <!-- SHARED GOALS (read-only for members) -->
+  <!-- SHARED MONTHLY GOAL (read-only) -->
   <div class="card">
     <div class="card-label">
       <span>Monthly Goal</span>
@@ -144,9 +144,10 @@
     <div id="monthlyView"></div>
   </div>
 
+  <!-- WEEKLY GOAL (user-editable, stored per week) -->
   <div class="card">
-    <div class="card-label"><span>Weekly Goal</span></div>
-    <div id="weeklyView"></div>
+    <div class="card-label"><span>Weekly Goal</span><span class="sub">your personal goal for this week</span></div>
+    <textarea id="weeklyGoalInput" rows="2" placeholder="What's your main goal this week?"></textarea>
   </div>
 
   <!-- DAY NAV -->
@@ -154,7 +155,7 @@
 
   <!-- PROJECT PICKER -->
   <div class="card">
-    <div class="card-label"><span>Proyek yang kamu kerjakan hari ini</span></div>
+    <div class="card-label"><span>Projects you're working on today</span></div>
     <div class="proj-pick" id="projPick"></div>
   </div>
 
@@ -165,23 +166,23 @@
   <div class="card">
     <div class="card-label"><span>Time Plan</span></div>
     <div id="timeplanArea"></div>
-    <button class="btn btn-add" onclick="addTimeRow()">+ tambah slot waktu</button>
+    <button class="btn btn-add" onclick="addTimeRow()">+ add time slot</button>
   </div>
 
   <!-- REMAINING + ISSUES -->
   <div class="card">
-    <div class="card-label"><span>Remaining</span><span class="sub">isi ~2 jam sebelum EOD, lalu tag Dinda</span></div>
-    <textarea id="remaining" rows="2" placeholder="Task yang tidak selesai + alasannya... (kosongkan kalau semua beres)"></textarea>
+    <div class="card-label"><span>Remaining</span><span class="sub">fill ~2 hours before EOD, then tag Dinda</span></div>
+    <textarea id="remaining" rows="2" placeholder="Unfinished tasks + reason... (leave empty if all done)"></textarea>
   </div>
   <div class="card">
     <div class="card-label"><span>Issues / Notes</span></div>
-    <textarea id="issues" rows="2" placeholder="Blockers, keputusan yang dibutuhkan, atau hal lain..."></textarea>
+    <textarea id="issues" rows="2" placeholder="Blockers, decisions needed, or anything else..."></textarea>
   </div>
 
   <!-- ACTIONS -->
   <div class="action-bar">
-    <button class="btn btn-green" id="scrumBtn" onclick="copyScrum()">📋 Copy untuk Scrum</button>
-    <button class="btn" onclick="downloadWeek()">⬇️ Download minggu ini</button>
+    <button class="btn btn-green" id="scrumBtn" onclick="copyScrum()">📋 Copy for Scrum</button>
+    <button class="btn" onclick="downloadWeek()">⬇️ Download this week</button>
     <label class="btn" style="cursor:pointer;">📂 Load file
       <input type="file" accept=".json" onchange="loadWeek(event)" class="hidden">
     </label>
@@ -189,7 +190,7 @@
   </div>
 
   <div style="margin-top:22px; text-align:center;">
-    <span class="admin-link" onclick="openAdmin()">Admin · edit goal</span>
+    <span class="admin-link" onclick="openAdmin()">Admin · edit goals</span>
     <span class="sync-tag" id="syncTag"></span>
   </div>
 
@@ -198,28 +199,24 @@
 <!-- ADMIN MODAL -->
 <div class="modal-bg" id="adminModal">
   <div class="modal">
-    <h2>Admin — set goal bersama</h2>
-    <p class="desc">Monthly, Weekly & daftar proyek di sini dilihat semua anggota tim. Butuh password admin untuk menyimpan.</p>
+    <h2>Admin — set shared goals</h2>
+    <p class="desc">Monthly goal and project list are visible to all team members. Admin password required to save.</p>
 
-    <div class="admin-section-title">Daftar proyek (yang bisa dipilih anggota)</div>
+    <div class="admin-section-title">Projects (selectable by team members)</div>
     <div id="adminProjects"></div>
-    <button class="btn btn-add" onclick="adminAddProject()">+ tambah proyek</button>
+    <button class="btn btn-add" onclick="adminAddProject()">+ add project</button>
 
     <div class="admin-section-title">Monthly Goal</div>
     <div id="adminMonthly"></div>
-    <button class="btn btn-add" onclick="adminAddMonthly()">+ tambah baris</button>
+    <button class="btn btn-add" onclick="adminAddMonthly()">+ add row</button>
 
-    <div class="admin-section-title">Weekly Goal (per proyek)</div>
-    <div id="adminWeekly"></div>
-    <button class="btn btn-add" onclick="adminAddWeekly()">+ tambah baris</button>
-
-    <div class="admin-section-title">Password admin</div>
-    <div class="pwd-wrap"><input type="password" id="adminPwd" placeholder="masukkan password admin"></div>
+    <div class="admin-section-title">Admin Password</div>
+    <div class="pwd-wrap"><input type="password" id="adminPwd" placeholder="enter admin password"></div>
     <div class="err hidden" id="adminErr"></div>
 
     <div class="modal-actions">
-      <button class="btn" onclick="closeAdmin()">Batal</button>
-      <button class="btn btn-primary" id="adminSaveBtn" onclick="adminSave()">Simpan & publish</button>
+      <button class="btn" onclick="closeAdmin()">Cancel</button>
+      <button class="btn btn-primary" id="adminSaveBtn" onclick="adminSave()">Save & publish</button>
     </div>
   </div>
 </div>
@@ -230,18 +227,18 @@
 // ============================================================
 const API = "/api/goals";
 const DAYS = ["senin","selasa","rabu","kamis","jumat"];
-const DAY_LABELS = {senin:"Senin", selasa:"Selasa", rabu:"Rabu", kamis:"Kamis", jumat:"Jumat"};
+const DAY_LABELS = {senin:"Monday", selasa:"Tuesday", rabu:"Wednesday", kamis:"Thursday", jumat:"Friday"};
 
 // ============================================================
 //  STATE
 // ============================================================
-let goals = { monthly: [], weekly: [], projects: [], updatedAt: null };
+let goals = { monthly: [], projects: [], updatedAt: null };
 let selectedDay = currentDayKey();
-let local = loadLocal();      // { weekId, days: { senin: {...}, ... } }
+let local = loadLocal();
 
 // ---------- date helpers ----------
 function currentDayKey() {
-  const d = new Date().getDay(); // 0 Sun .. 6 Sat
+  const d = new Date().getDay();
   return ({1:"senin",2:"selasa",3:"rabu",4:"kamis",5:"jumat"})[d] || "senin";
 }
 function isFriday() { return new Date().getDay() === 5; }
@@ -252,7 +249,7 @@ function weekId() {
   return d.getFullYear() + "-W" + String(week).padStart(2,"0");
 }
 function prettyDate() {
-  return new Date().toLocaleDateString("id-ID",{weekday:"long",day:"numeric",month:"long"});
+  return new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric",year:"numeric"});
 }
 
 // ---------- local storage ----------
@@ -262,10 +259,13 @@ function loadLocal() {
     const raw = localStorage.getItem("scrum-week");
     if (raw) {
       const obj = JSON.parse(raw);
-      if (obj.weekId === weekId()) return obj;
+      if (obj.weekId === weekId()) {
+        if (!obj.weeklyGoal) obj.weeklyGoal = "";
+        return obj;
+      }
     }
   } catch(e){}
-  const fresh = { weekId: weekId(), days: {} };
+  const fresh = { weekId: weekId(), weeklyGoal: "", days: {} };
   DAYS.forEach(d => fresh.days[d] = blankDay());
   return fresh;
 }
@@ -278,7 +278,7 @@ function saveLocal() {
 let saveTimer;
 function flashSaved() {
   const el = document.getElementById("saveState");
-  el.textContent = "✓ tersimpan otomatis";
+  el.textContent = "✓ auto-saved";
   clearTimeout(saveTimer);
   saveTimer = setTimeout(()=> el.textContent = "", 1800);
 }
@@ -291,11 +291,11 @@ async function fetchGoals() {
   try {
     const res = await fetch(API, { cache: "no-store" });
     if (res.ok) {
-      goals = await res.json();
-      tag.textContent = goals.updatedAt ? "" : "";
+      const data = await res.json();
+      goals = { monthly: data.monthly || [], projects: data.projects || [], updatedAt: data.updatedAt || null };
     }
   } catch(e) {
-    tag.textContent = " · offline (goal belum tersinkron)";
+    tag.textContent = " · offline (goals not synced)";
   }
   renderGoals();
   renderProjPick();
@@ -304,7 +304,6 @@ async function fetchGoals() {
 
 function renderGoals() {
   const mv = document.getElementById("monthlyView");
-  const wv = document.getElementById("weeklyView");
   const upd = document.getElementById("goalUpdated");
 
   if (goals.monthly && goals.monthly.length) {
@@ -312,17 +311,21 @@ function renderGoals() {
       const proj = g.project ? `<span class="proj">${esc(g.project)}</span>` : "";
       return `<div class="goal-item">${proj}<span>${esc(g.text)}</span></div>`;
     }).join("");
-  } else { mv.innerHTML = `<div class="goal-empty">Belum diisi admin.</div>`; }
+  } else { mv.innerHTML = `<div class="goal-empty">Not set by admin yet.</div>`; }
 
-  if (goals.weekly && goals.weekly.length) {
-    wv.innerHTML = goals.weekly.map(g => {
-      const proj = g.project ? `<span class="proj">${esc(g.project)}</span>` : "";
-      return `<div class="goal-item">${proj}<span>${esc(g.text)}</span></div>`;
-    }).join("");
-  } else { wv.innerHTML = `<div class="goal-empty">Belum diisi admin.</div>`; }
-
-  upd.textContent = goals.updatedAt ? "diupdate " + new Date(goals.updatedAt).toLocaleDateString("id-ID",{day:"numeric",month:"short"}) : "";
+  upd.textContent = goals.updatedAt ? "updated " + new Date(goals.updatedAt).toLocaleDateString("en-US",{month:"short",day:"numeric"}) : "";
 }
+
+// ============================================================
+//  WEEKLY GOAL (user-editable)
+// ============================================================
+function renderWeeklyGoal() {
+  document.getElementById("weeklyGoalInput").value = local.weeklyGoal || "";
+}
+document.getElementById("weeklyGoalInput").addEventListener("input", e => {
+  local.weeklyGoal = e.target.value;
+  saveLocal();
+});
 
 // ============================================================
 //  DAY NAV
@@ -356,7 +359,7 @@ function dayState() {
 function renderProjPick() {
   const wrap = document.getElementById("projPick");
   const list = goals.projects && goals.projects.length ? goals.projects : [];
-  if (!list.length) { wrap.innerHTML = `<div class="goal-empty">Admin belum menambahkan proyek.</div>`; return; }
+  if (!list.length) { wrap.innerHTML = `<div class="goal-empty">Admin hasn't added projects yet.</div>`; return; }
   const sel = dayState().selected || [];
   wrap.innerHTML = list.map(p => {
     const on = sel.includes(p) ? "on" : "";
@@ -386,7 +389,7 @@ function renderDaily() {
   const ds = dayState();
   const sel = ds.selected || [];
   if (!sel.length) {
-    area.innerHTML = `<div class="card"><div class="goal-empty">Pilih minimal satu proyek di atas untuk mulai isi Daily To-Do.</div></div>`;
+    area.innerHTML = `<div class="card"><div class="goal-empty">Select at least one project above to start your Daily To-Do.</div></div>`;
     return;
   }
   area.innerHTML = sel.map(p => {
@@ -396,17 +399,17 @@ function renderDaily() {
       <div class="task-row">
         <input type="checkbox" ${t.done?"checked":""} onchange="setDone('${esc(p)}',${i},this.checked)">
         <input type="text" class="${t.done?'done':''}" value="${esc(t.text)}" placeholder="task..." oninput="setTask('${esc(p)}',${i},this.value)">
-        <button class="task-del" onclick="delTask('${esc(p)}',${i})" title="hapus">×</button>
+        <button class="task-del" onclick="delTask('${esc(p)}',${i})" title="remove">×</button>
       </div>`).join("");
     return `
       <div class="proj-block">
         <div class="proj-head"><span>${esc(p)}</span></div>
         <div class="proj-body">
-          <label class="field-label">Goal harian</label>
-          <input type="text" value="${esc(pd.goal||'')}" placeholder="goal / KPI hari ini untuk proyek ini" oninput="setGoal('${esc(p)}',this.value)" style="margin-bottom:10px;">
+          <label class="field-label">Daily Goal</label>
+          <input type="text" value="${esc(pd.goal||'')}" placeholder="today's goal / KPI for this project" oninput="setGoal('${esc(p)}',this.value)" style="margin-bottom:10px;">
           <label class="field-label">Tasks</label>
           ${taskRows}
-          <button class="btn btn-add" onclick="addTask('${esc(p)}')">+ tambah task</button>
+          <button class="btn btn-add" onclick="addTask('${esc(p)}')">+ add task</button>
         </div>
       </div>`;
   }).join("");
@@ -432,7 +435,7 @@ function renderTimeplan() {
   area.innerHTML = ds.timeplan.map((row,i) => `
     <div class="timeplan-row">
       <input type="text" class="time" value="${esc(row.time)}" placeholder="09:05–12:00" oninput="setTime(${i},'time',this.value)">
-      <input type="text" value="${esc(row.task)}" placeholder="ngerjain apa..." oninput="setTime(${i},'task',this.value)">
+      <input type="text" value="${esc(row.task)}" placeholder="what are you working on..." oninput="setTime(${i},'task',this.value)">
       <button class="task-del" onclick="delTimeRow(${i})">×</button>
     </div>`).join("");
 }
@@ -456,20 +459,19 @@ document.getElementById("issues").addEventListener("input", e => { dayState().is
 // ============================================================
 function copyScrum() {
   const ds = dayState();
-  let out = "📋 Daily Scrum — " + DAY_LABELS[selectedDay] + ", " + prettyDate() + "\n\n";
+  let out = "📋 Daily Scrum — " + prettyDate() + "\n\n";
 
   out += "Monthly Goal:\n";
   out += (goals.monthly && goals.monthly.length)
     ? goals.monthly.map(g => "  • " + (g.project? "["+g.project+"] ":"") + g.text).join("\n")
     : "  • -";
+
   out += "\n\nWeekly Goal:\n";
-  out += (goals.weekly && goals.weekly.length)
-    ? goals.weekly.map(g => "  • " + (g.project? "["+g.project+"] ":"") + g.text).join("\n")
-    : "  • -";
+  out += local.weeklyGoal ? "  • " + local.weeklyGoal : "  • -";
 
   out += "\n\n───────────────\n\nDaily To-Do:\n";
   const sel = ds.selected || [];
-  if (!sel.length) { out += "  (belum pilih proyek)\n"; }
+  if (!sel.length) { out += "  (no project selected)\n"; }
   sel.forEach(p => {
     const pd = ds.projects[p] || {goal:"",tasks:[]};
     out += "\n▸ " + p + "\n";
@@ -490,9 +492,9 @@ function copyScrum() {
 
   navigator.clipboard.writeText(out).then(() => {
     const b = document.getElementById("scrumBtn");
-    b.textContent = "✓ tersalin!";
+    b.textContent = "✓ copied!";
     b.classList.add("copied");
-    setTimeout(()=>{ b.textContent = "📋 Copy untuk Scrum"; b.classList.remove("copied"); }, 2000);
+    setTimeout(()=>{ b.textContent = "📋 Copy for Scrum"; b.classList.remove("copied"); }, 2000);
   });
 }
 
@@ -515,13 +517,13 @@ function loadWeek(ev) {
     try {
       const obj = JSON.parse(e.target.result);
       if (obj.days) {
-        local = { weekId: obj.weekId || weekId(), days: obj.days };
+        local = { weekId: obj.weekId || weekId(), weeklyGoal: obj.weeklyGoal || "", days: obj.days };
         saveLocal();
         switchDay(currentDayKey() in local.days ? currentDayKey() : DAYS[0]);
-        renderTimeplan(); renderRemaining();
-        alert("Berhasil dimuat: " + (obj.weekId||"minggu tersimpan"));
+        renderTimeplan(); renderRemaining(); renderWeeklyGoal();
+        alert("Loaded: " + (obj.weekId||"saved week"));
       }
-    } catch(err){ alert("File tidak valid."); }
+    } catch(err){ alert("Invalid file."); }
   };
   reader.readAsText(file);
   ev.target.value = "";
@@ -530,16 +532,14 @@ function loadWeek(ev) {
 // ============================================================
 //  ADMIN
 // ============================================================
-let adminDraft = { projects: [], monthly: [], weekly: [] };
+let adminDraft = { projects: [], monthly: [] };
 function openAdmin() {
   adminDraft = {
     projects: [...(goals.projects||[])],
     monthly: (goals.monthly||[]).map(g=>({...g})),
-    weekly: (goals.weekly||[]).map(g=>({...g})),
   };
   if (!adminDraft.projects.length) adminDraft.projects = [""];
   if (!adminDraft.monthly.length) adminDraft.monthly = [{project:"",text:""}];
-  if (!adminDraft.weekly.length) adminDraft.weekly = [{project:"",text:""}];
   renderAdmin();
   document.getElementById("adminErr").classList.add("hidden");
   document.getElementById("adminModal").classList.add("show");
@@ -549,12 +549,12 @@ function closeAdmin(){ document.getElementById("adminModal").classList.remove("s
 function renderAdmin() {
   document.getElementById("adminProjects").innerHTML = adminDraft.projects.map((p,i) => `
     <div class="admin-row">
-      <input type="text" value="${esc(p)}" placeholder="nama proyek" oninput="adminSet('projects',${i},null,this.value)">
+      <input type="text" value="${esc(p)}" placeholder="project name" oninput="adminSet('projects',${i},null,this.value)">
       <button class="task-del" onclick="adminDel('projects',${i})">×</button>
     </div>`).join("");
 
   const projOpts = (val) => {
-    const opts = ['<option value="">(umum / tanpa proyek)</option>']
+    const opts = ['<option value="">(general / no project)</option>']
       .concat(adminDraft.projects.filter(x=>x.trim()).map(p=>`<option value="${esc(p)}" ${p===val?"selected":""}>${esc(p)}</option>`));
     return opts.join("");
   };
@@ -562,15 +562,8 @@ function renderAdmin() {
   document.getElementById("adminMonthly").innerHTML = adminDraft.monthly.map((g,i) => `
     <div class="admin-row">
       <select style="width:150px; padding:8px; border:1px solid var(--border); border-radius:7px; font-family:inherit; font-size:13px;" onchange="adminSet('monthly',${i},'project',this.value)">${projOpts(g.project)}</select>
-      <input type="text" value="${esc(g.text)}" placeholder="isi goal bulanan" oninput="adminSet('monthly',${i},'text',this.value)">
+      <input type="text" value="${esc(g.text)}" placeholder="monthly goal" oninput="adminSet('monthly',${i},'text',this.value)">
       <button class="task-del" onclick="adminDel('monthly',${i})">×</button>
-    </div>`).join("");
-
-  document.getElementById("adminWeekly").innerHTML = adminDraft.weekly.map((g,i) => `
-    <div class="admin-row">
-      <select style="width:150px; padding:8px; border:1px solid var(--border); border-radius:7px; font-family:inherit; font-size:13px;" onchange="adminSet('weekly',${i},'project',this.value)">${projOpts(g.project)}</select>
-      <input type="text" value="${esc(g.text)}" placeholder="isi goal mingguan" oninput="adminSet('weekly',${i},'text',this.value)">
-      <button class="task-del" onclick="adminDel('weekly',${i})">×</button>
     </div>`).join("");
 }
 function adminSet(list,i,key,val){
@@ -580,34 +573,33 @@ function adminSet(list,i,key,val){
 function adminDel(list,i){ adminDraft[list].splice(i,1); if(!adminDraft[list].length){ adminDraft[list].push(list==="projects"?"":{project:"",text:""}); } renderAdmin(); }
 function adminAddProject(){ adminDraft.projects.push(""); renderAdmin(); }
 function adminAddMonthly(){ adminDraft.monthly.push({project:"",text:""}); renderAdmin(); }
-function adminAddWeekly(){ adminDraft.weekly.push({project:"",text:""}); renderAdmin(); }
 
 async function adminSave() {
   const pwd = document.getElementById("adminPwd").value;
   const err = document.getElementById("adminErr");
   const btn = document.getElementById("adminSaveBtn");
-  if (!pwd) { err.textContent="Password masih kosong."; err.classList.remove("hidden"); return; }
+  if (!pwd) { err.textContent="Password is empty."; err.classList.remove("hidden"); return; }
 
   const payload = {
     password: pwd,
     projects: adminDraft.projects.map(p=>p.trim()).filter(Boolean),
     monthly: adminDraft.monthly.filter(g=>g.text.trim()).map(g=>({project:g.project||"",text:g.text.trim()})),
-    weekly: adminDraft.weekly.filter(g=>g.text.trim()).map(g=>({project:g.project||"",text:g.text.trim()})),
+    weekly: [],
   };
 
-  btn.textContent="Menyimpan..."; btn.disabled=true;
+  btn.textContent="Saving..."; btn.disabled=true;
   try {
     const res = await fetch(API, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload) });
-    if (res.status===401) { err.textContent="Password salah."; err.classList.remove("hidden"); }
+    if (res.status===401) { err.textContent="Wrong password."; err.classList.remove("hidden"); }
     else if (res.ok) {
       const data = await res.json();
-      goals = data.config;
+      goals = { monthly: data.config.monthly || [], projects: data.config.projects || [], updatedAt: data.config.updatedAt || null };
       err.classList.add("hidden");
       closeAdmin();
       renderGoals(); renderProjPick(); renderDaily();
-    } else { err.textContent="Gagal menyimpan."; err.classList.remove("hidden"); }
-  } catch(e){ err.textContent="Tidak bisa terhubung ke server."; err.classList.remove("hidden"); }
-  btn.textContent="Simpan & publish"; btn.disabled=false;
+    } else { err.textContent="Failed to save."; err.classList.remove("hidden"); }
+  } catch(e){ err.textContent="Unable to connect to server."; err.classList.remove("hidden"); }
+  btn.textContent="Save & publish"; btn.disabled=false;
 }
 
 // ============================================================
@@ -622,11 +614,12 @@ function init() {
   document.getElementById("todayPill").textContent = prettyDate();
   if (isFriday()) {
     document.getElementById("fridayBanner").classList.add("show");
-    setTimeout(downloadWeek, 1200); // auto-download on Friday
+    setTimeout(downloadWeek, 1200);
   }
   renderWeekNav();
   renderTimeplan();
   renderRemaining();
+  renderWeeklyGoal();
   fetchGoals();
 }
 init();
