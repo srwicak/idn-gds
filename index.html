@@ -66,6 +66,7 @@
   .proj-head-input:focus { outline: none; border-bottom-color: var(--accent-dark); }
   .proj-body { padding: 12px 14px; }
   .field-label { font-size: 11px; color: var(--text-faint); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; display: block; }
+  .monthly-ref { font-size: 12px; color: var(--text-faint); font-style: italic; margin-bottom: 10px; padding: 6px 8px; background: var(--surface-2); border-radius: var(--radius-sm); }
 
   input[type="text"], input[type="password"], textarea {
     width: 100%; font-family: inherit; font-size: 14px; color: var(--text);
@@ -88,6 +89,8 @@
   .btn-primary:hover { background: var(--accent-dark); }
   .btn-green { background: var(--green); border-color: var(--green); color: #fff; }
   .btn-green:hover { background: #167d5c; }
+  .btn-orange { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn-orange:hover { background: var(--accent-dark); }
 
   .timeplan-row { display: flex; gap: 8px; margin-bottom: 6px; }
   .timeplan-row input.time { width: 130px; flex-shrink: 0; }
@@ -147,9 +150,9 @@
     <div id="monthlyView"></div>
   </div>
 
-  <!-- WEEKLY GOAL (user-editable per project, saved per week) -->
+  <!-- WEEKLY GOAL (per project, auto-derived from monthly, user fills KPI + main task) -->
   <div class="card">
-    <div class="card-label"><span>Weekly Goal</span><span class="sub">per project · saved for the whole week</span></div>
+    <div class="card-label"><span>Weekly Goal</span><span class="sub">per monthly project · saved for the whole week</span></div>
     <div id="weeklyArea"></div>
     <button class="btn btn-add" onclick="addWeeklyGoal()">+ add project</button>
   </div>
@@ -173,7 +176,7 @@
     <button class="btn btn-add" onclick="addTimeRow()">+ add time slot</button>
   </div>
 
-  <!-- REMAINING + ISSUES -->
+  <!-- REMAINING + ISSUES (evening only) -->
   <div class="card">
     <div class="card-label"><span>Remaining</span><span class="sub">fill ~2h before EOD, then tag Dinda</span></div>
     <textarea id="remaining" rows="2" placeholder="Unfinished tasks + reason... (leave empty if all done)"></textarea>
@@ -185,7 +188,8 @@
 
   <!-- ACTIONS -->
   <div class="action-bar">
-    <button class="btn btn-green" id="scrumBtn" onclick="copyScrum()">Copy for Scrum</button>
+    <button class="btn btn-green" id="morningBtn" onclick="copyMorning()">Copy Morning Scrum</button>
+    <button class="btn btn-orange" id="eveningBtn" onclick="copyEvening()">Copy Evening Scrum</button>
     <button class="btn" onclick="downloadWeek()">Download this week</button>
     <label class="btn" style="cursor:pointer;">Load file
       <input type="file" accept=".json" onchange="loadWeek(event)" class="hidden">
@@ -287,11 +291,13 @@ async function fetchGoals() {
     if (res.ok) {
       const data = await res.json();
       goals = { monthly: data.monthly || [], projects: data.projects || [], updatedAt: data.updatedAt || null };
+      syncWeeklyToMonthly();
     }
   } catch(e) {
     tag.textContent = " · offline (goals not synced)";
   }
   renderGoals();
+  renderWeeklyGoals();
   renderProjPick();
   renderDaily();
 }
@@ -310,27 +316,53 @@ function renderGoals() {
   upd.textContent = goals.updatedAt ? "updated " + new Date(goals.updatedAt).toLocaleDateString("en-US",{month:"short",day:"numeric"}) : "";
 }
 
-// ── WEEKLY GOAL (per project, user-editable, saved per week) ──
+// ── WEEKLY GOAL ──
+// Auto-add a weekly goal entry for each monthly project not yet tracked
+function syncWeeklyToMonthly() {
+  if (!Array.isArray(local.weeklyGoals)) local.weeklyGoals = [];
+  const seen = new Set(local.weeklyGoals.map(w => w.project));
+  (goals.monthly || []).forEach(g => {
+    const proj = g.project || "";
+    if (proj && !seen.has(proj)) {
+      local.weeklyGoals.push({ project: proj, kpi: "", mainTask: "" });
+      seen.add(proj);
+    }
+  });
+  saveLocal();
+}
+
+// Return monthly goal texts for a given project (for reference display)
+function monthlyGoalsForProject(proj) {
+  return (goals.monthly || []).filter(g => g.project === proj).map(g => g.text);
+}
+
 function renderWeeklyGoals() {
   const area = document.getElementById("weeklyArea");
   const wg = local.weeklyGoals || [];
   if (!wg.length) {
-    area.innerHTML = `<div class="goal-empty" style="margin-bottom:8px;">No weekly goals yet. Add a project below.</div>`;
+    area.innerHTML = `<div class="goal-empty" style="margin-bottom:8px;">No weekly goals yet — add a project or wait for monthly goals to load.</div>`;
     return;
   }
-  area.innerHTML = wg.map((w, i) => `
+  area.innerHTML = wg.map((w, i) => {
+    const refs = monthlyGoalsForProject(w.project);
+    const refHtml = refs.length
+      ? `<div class="monthly-ref">Monthly: ${refs.map(r => esc(r)).join(" · ")}</div>`
+      : "";
+    return `
     <div class="proj-block">
       <div class="proj-head">
         <input class="proj-head-input" type="text" value="${esc(w.project)}" placeholder="Project name" oninput="setWeeklyGoal(${i},'project',this.value)">
         <button class="task-del" onclick="delWeeklyGoal(${i})">×</button>
       </div>
       <div class="proj-body">
+        ${refHtml}
         <label class="field-label">KPI</label>
         <input type="text" value="${esc(w.kpi)}" placeholder="KPI for this week" oninput="setWeeklyGoal(${i},'kpi',this.value)" style="margin-bottom:8px;">
         <label class="field-label">Main Task</label>
         <input type="text" value="${esc(w.mainTask)}" placeholder="main task for this week" oninput="setWeeklyGoal(${i},'mainTask',this.value)">
       </div>
-    </div>`).join("");
+    </div>`;
+  }).join("");
 }
 function setWeeklyGoal(i, key, val) {
   if (!local.weeklyGoals[i]) local.weeklyGoals[i] = { project:"", kpi:"", mainTask:"" };
@@ -466,71 +498,79 @@ function renderRemaining() {
 document.getElementById("remaining").addEventListener("input", e => { dayState().remaining = e.target.value; saveLocal(); });
 document.getElementById("issues").addEventListener("input", e => { dayState().issues = e.target.value; saveLocal(); });
 
-// ── COPY FOR SCRUM ──
-function copyScrum() {
+// ── COPY LOGIC ──
+// Builds the morning portion (shared by both morning and evening copy)
+function buildScrum() {
   const ds = dayState();
-  let out = "";
+  let out = "[Daily Scrum Format]\n";
 
   // Monthly Goal
-  out += "Monthly Goal: \n";
+  out += "• Monthly Goal:\n";
   if (goals.monthly && goals.monthly.length) {
     goals.monthly.forEach((g, i) => {
       const prefix = g.project ? "[" + g.project + "] " : "";
-      out += (i + 1) + ". " + prefix + g.text + "\n";
+      out += "  ◦ " + (i + 1) + ". " + prefix + g.text + "\n";
     });
   } else {
-    out += "1. \n2. \n";
+    out += "  ◦ 1.\n  ◦ 2.\n";
   }
 
   // Weekly Goal
-  out += "\nWeekly Goal: \n";
-  const wg = (local.weeklyGoals || []);
-  if (wg.length) {
-    wg.forEach((w, i) => {
-      if (i > 0) out += "\n";
-      out += (w.project || "") + "\n";
-      out += (w.kpi || "") + "\n";
-      out += (w.mainTask || "") + "\n";
-    });
-  }
+  out += "• Weekly Goal:\n";
+  (local.weeklyGoals || []).forEach(w => {
+    out += "  ◦ " + (w.project || "") + "\n";
+    if (w.kpi) out += "    ■ " + w.kpi + "\n";
+    if (w.mainTask) out += "    ■ " + w.mainTask + "\n";
+  });
 
-  // Daily To-Do
-  out += "\n\nDaily To-Do: \n";
-  const sel = ds.selected || [];
-  sel.forEach((p, pi) => {
-    if (pi > 0) out += "\n";
+  // Daily To-Do — section header + projects at same bullet level
+  out += "• Daily To-Do:\n";
+  (ds.selected || []).forEach(p => {
     const pd = ds.projects[p] || {goal:"",tasks:[]};
-    out += p + "\n";
-    if (pd.goal) out += pd.goal + "\n";
+    out += "• " + p + "\n";
+    if (pd.goal) out += "  ◦ " + pd.goal + "\n";
     (pd.tasks||[]).filter(t => t.text.trim()).forEach(t => {
-      out += t.text + "\n";
+      out += "  ◦ " + t.text + "\n";
     });
   });
 
-  // Time Plan
-  out += "\n[ Time Plan ]\n\n";
-  const tp = (ds.timeplan||[]).filter(r => r.time || r.task);
-  tp.forEach(r => {
-    out += (r.time || "") + (r.task ? " " + r.task : "") + "\n";
+  // Time Plan — header without bullet, items with bullet
+  out += "[ Time Plan ]\n";
+  out += "• 09:00–09:05 Daily scrum\n";
+  (ds.timeplan||[]).filter(r => r.time || r.task).forEach(r => {
+    out += "• " + (r.time || "") + (r.task ? " " + r.task : "") + "\n";
   });
 
-  // Disclaimer
-  out += "\n\nFor our daily tasks, if you think there are tasks you won't be able to finish today, please make sure to tag Dinda and share them at least 2 hours before the end of your work hours.\n";
+  return out;
+}
+
+function copyMorning() {
+  const out = buildScrum();
+  navigator.clipboard.writeText(out).then(() => {
+    const b = document.getElementById("morningBtn");
+    const orig = b.textContent;
+    b.textContent = "✓ Copied!";
+    setTimeout(() => b.textContent = orig, 2000);
+  });
+}
+
+function copyEvening() {
+  const ds = dayState();
+  let out = buildScrum();
+
+  out += "\nFor our daily tasks, if you think there are tasks you won't be able to finish today, please make sure to tag Dinda and share them at least 2 hours before the end of your work hours.\n";
   out += "Then, the process will be like this: at 6:30 PM (Jakarta Time), the bot will do a final check on the crossed-out tasks and send an alert for the deferred tasks.\n";
   out += "──── (fill in ~2h before EOD, then share for leader ( tag Dinda )OK) ────\n";
-
-  // Remaining
   out += "[ Remaining ]\n\n";
   out += (ds.remaining || "") + "\n";
-
-  // Issues / Notes
   out += "[ Issues / Notes ]\n\n";
   out += (ds.issues || "");
 
   navigator.clipboard.writeText(out).then(() => {
-    const b = document.getElementById("scrumBtn");
+    const b = document.getElementById("eveningBtn");
+    const orig = b.textContent;
     b.textContent = "✓ Copied!";
-    setTimeout(()=>{ b.textContent = "Copy for Scrum"; }, 2000);
+    setTimeout(() => b.textContent = orig, 2000);
   });
 }
 
@@ -628,9 +668,10 @@ async function adminSave() {
     else if (res.ok) {
       const data = await res.json();
       goals = { monthly: data.config.monthly||[], projects: data.config.projects||[], updatedAt: data.config.updatedAt||null };
+      syncWeeklyToMonthly();
       err.classList.add("hidden");
       closeAdmin();
-      renderGoals(); renderProjPick(); renderDaily();
+      renderGoals(); renderWeeklyGoals(); renderProjPick(); renderDaily();
     } else { err.textContent="Failed to save."; err.classList.remove("hidden"); }
   } catch(e){ err.textContent="Unable to connect to server."; err.classList.remove("hidden"); }
   btn.textContent="Save & publish"; btn.disabled=false;
