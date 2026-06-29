@@ -251,6 +251,16 @@ function loadLocal() {
       const obj = JSON.parse(raw);
       if (obj.weekId === weekId()) {
         if (!Array.isArray(obj.weeklyGoals)) obj.weeklyGoals = [];
+        // migrate old {kpi, mainTask} format to {goals:[]}
+        obj.weeklyGoals = obj.weeklyGoals.map(w => {
+          if (!Array.isArray(w.goals)) {
+            const g = [];
+            if (w.kpi) g.push(w.kpi);
+            if (w.mainTask) g.push(w.mainTask);
+            return {project: w.project, goals: g.length ? g : [""]};
+          }
+          return w;
+        });
         return obj;
       }
     }
@@ -318,7 +328,7 @@ function toggleWeeklyProj(proj) {
   if (!local.weeklyGoals) local.weeklyGoals = [];
   const i = local.weeklyGoals.findIndex(w=>w.project===proj);
   if (i >= 0) { local.weeklyGoals.splice(i,1); }
-  else { local.weeklyGoals.push({project:proj,kpi:"",mainTask:""}); }
+  else { local.weeklyGoals.push({project:proj,goals:[""]}); }
   saveLocal(); renderWeeklyGoals();
 }
 function addWeeklyOther() {
@@ -327,14 +337,26 @@ function addWeeklyOther() {
   if (!name) return;
   if (!local.weeklyGoals) local.weeklyGoals = [];
   if (!local.weeklyGoals.find(w=>w.project===name)) {
-    local.weeklyGoals.push({project:name,kpi:"",mainTask:""});
+    local.weeklyGoals.push({project:name,goals:[""]});
     saveLocal();
   }
   showWeeklyOther = false;
   renderWeeklyGoals();
 }
-function setWeeklyGoal(i,key,val) {
-  if (local.weeklyGoals[i]) { local.weeklyGoals[i][key]=val; saveLocal(); }
+function setWeeklyGoalText(projIdx,goalIdx,val) {
+  const g = local.weeklyGoals[projIdx]?.goals;
+  if (g && g[goalIdx] !== undefined) { g[goalIdx]=val; saveLocal(); }
+}
+function addWeeklyGoalRow(projIdx) {
+  const w = local.weeklyGoals[projIdx];
+  if (w) { w.goals.push(""); saveLocal(); renderWeeklyGoals(); }
+}
+function delWeeklyGoalRow(projIdx,goalIdx) {
+  const w = local.weeklyGoals[projIdx];
+  if (!w) return;
+  w.goals.splice(goalIdx,1);
+  if (!w.goals.length) w.goals.push("");
+  saveLocal(); renderWeeklyGoals();
 }
 function removeWeeklyGoal(proj) {
   local.weeklyGoals = (local.weeklyGoals||[]).filter(w=>w.project!==proj);
@@ -371,6 +393,11 @@ function renderWeeklyGoals() {
     const refHtml = refs.length
       ? `<div class="monthly-ref">Monthly: ${refs.map(r=>esc(r)).join(" · ")}</div>`
       : "";
+    const goalRows = (w.goals||[""]).map((g,gi) => `
+      <div class="task-row">
+        <input type="text" value="${esc(g)}" placeholder="goal for this week..." oninput="setWeeklyGoalText(${i},${gi},this.value)">
+        <button class="task-del" onclick="delWeeklyGoalRow(${i},${gi})">×</button>
+      </div>`).join("");
     return `<div class="proj-block">
       <div class="proj-head">
         <span>${esc(w.project)}</span>
@@ -378,10 +405,8 @@ function renderWeeklyGoals() {
       </div>
       <div class="proj-body">
         ${refHtml}
-        <label class="field-label">KPI</label>
-        <input type="text" value="${esc(w.kpi)}" placeholder="KPI for this week" oninput="setWeeklyGoal(${i},'kpi',this.value)" style="margin-bottom:8px;">
-        <label class="field-label">Main Task</label>
-        <input type="text" value="${esc(w.mainTask)}" placeholder="main task for this week" oninput="setWeeklyGoal(${i},'mainTask',this.value)">
+        ${goalRows}
+        <button class="btn btn-add" onclick="addWeeklyGoalRow(${i})">+ add goal</button>
       </div>
     </div>`;
   }).join("");
@@ -564,8 +589,7 @@ function buildScrum() {
   out += "• Weekly Goal:\n";
   (local.weeklyGoals||[]).forEach(w=>{
     out += "  ◦ "+(w.project||"")+"\n";
-    if (w.kpi) out += "    ■ "+w.kpi+"\n";
-    if (w.mainTask) out += "    ■ "+w.mainTask+"\n";
+    (w.goals||[]).filter(g=>g.trim()).forEach(g=>{ out += "    ■ "+g+"\n"; });
   });
 
   out += "• Daily To-Do:\n";
@@ -626,7 +650,8 @@ function loadWeek(ev) {
     try {
       const obj = JSON.parse(e.target.result);
       if (obj.days) {
-        local = {weekId:obj.weekId||weekId(),weeklyGoals:Array.isArray(obj.weeklyGoals)?obj.weeklyGoals:[],days:obj.days};
+        const rawWg = Array.isArray(obj.weeklyGoals)?obj.weeklyGoals:[];
+        local = {weekId:obj.weekId||weekId(),weeklyGoals:rawWg.map(w=>Array.isArray(w.goals)?w:{project:w.project,goals:[w.kpi,w.mainTask].filter(Boolean)||[""]}),days:obj.days};
         saveLocal();
         switchDay(currentDayKey() in local.days?currentDayKey():DAYS[0]);
         renderTimeplan(); renderRemaining(); renderWeeklyGoals();
